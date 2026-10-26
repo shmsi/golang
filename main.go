@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -44,6 +45,15 @@ func count(r io.Reader) (Counts, error) {
 }
 
 func main() {
+	l := flag.Bool("l", false, "print only lines")
+	w := flag.Bool("w", false, "print only word count")
+	c := flag.Bool("c", false, "print only size")
+	flag.Parse()
+
+	if !*l && !*w && !*c {
+		*l, *w, *c = true, true, true
+	}
+
 	r := os.Stdin
 	counts, err := count(r)
 
@@ -51,6 +61,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("lines %d and bytes %d and words %d\n", counts.lines, counts.bytes, counts.words)
+	if *l {
+		fmt.Printf("%8d", counts.lines)
+	}
+	if *w {
+		fmt.Printf("%8d", counts.words)
+	}
+	if *c {
+		fmt.Printf("%8d", counts.bytes)
+	}
+
+	// if !*l && !*w && !*c {
+	// 	fmt.Printf("%8d%8d%8d ", counts.lines, counts.words, counts.bytes)
+	// }
+	fmt.Println()
 
 }
