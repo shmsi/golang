@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"unicode"
 )
 
@@ -81,6 +82,11 @@ func printCounts(counts Counts, name string, showLines, showWords, showBytes boo
 	fmt.Println()
 }
 
+type fileResult struct {
+	counts Counts
+	err    error
+}
+
 func main() {
 	l := flag.Bool("l", false, "print only lines")
 	w := flag.Bool("w", false, "print only word count")
@@ -100,23 +106,36 @@ func main() {
 
 		printCounts(counts, "", *l, *w, *c)
 	} else {
-		failed := false
 		var total Counts
-		for i := range args {
-			counts, err := countFile(args[i])
+		var wg sync.WaitGroup
+		results := make([]fileResult, len(args))
+		for i, arg := range args {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				result, err := countFile(arg)
+				results[i] = fileResult{result, err}
+			}()
+		}
+		wg.Wait()
+
+		anyFailed := false
+
+		for i, fr := range results {
+			r, err := fr.counts, fr.err
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				failed = true
+				anyFailed = true
 
 				continue
 			}
-			total.add(counts)
-			printCounts(counts, args[i], *l, *w, *c)
+			total.add(r)
+			printCounts(r, args[i], *l, *w, *c)
 		}
 		if len(args) > 1 {
 			printCounts(total, "total", *l, *w, *c)
 		}
-		if failed {
+		if anyFailed {
 			os.Exit(1)
 		}
 
