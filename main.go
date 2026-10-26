@@ -16,6 +16,12 @@ type Counts struct {
 	bytes int
 }
 
+func (c *Counts) add(other Counts) {
+	c.bytes += other.bytes
+	c.lines += other.lines
+	c.words += other.words
+}
+
 func count(r io.Reader) (Counts, error) {
 	counts := Counts{}
 	inword := false
@@ -44,36 +50,76 @@ func count(r io.Reader) (Counts, error) {
 	return counts, nil
 }
 
+func countFile(path string) (Counts, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return Counts{}, err
+	}
+	defer f.Close()
+	return count(f)
+}
+
+func printCounts(counts Counts, name string, showLines, showWords, showBytes bool) {
+	if !showLines && !showWords && !showBytes {
+		showLines, showWords, showBytes = true, true, true
+	}
+
+	if showLines {
+		fmt.Printf("%8d", counts.lines)
+	}
+	if showWords {
+		fmt.Printf("%8d", counts.words)
+	}
+	if showBytes {
+		fmt.Printf("%8d", counts.bytes)
+	}
+
+	if name != "" {
+		fmt.Printf(" %s", name)
+	}
+
+	fmt.Println()
+}
+
 func main() {
 	l := flag.Bool("l", false, "print only lines")
 	w := flag.Bool("w", false, "print only word count")
 	c := flag.Bool("c", false, "print only size")
 	flag.Parse()
 
-	if !*l && !*w && !*c {
-		*l, *w, *c = true, true, true
-	}
+	args := flag.Args()
 
-	r := os.Stdin
-	counts, err := count(r)
+	if len(args) == 0 {
 
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if *l {
-		fmt.Printf("%8d", counts.lines)
-	}
-	if *w {
-		fmt.Printf("%8d", counts.words)
-	}
-	if *c {
-		fmt.Printf("%8d", counts.bytes)
-	}
+		r := os.Stdin
+		counts, err := count(r)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 
-	// if !*l && !*w && !*c {
-	// 	fmt.Printf("%8d%8d%8d ", counts.lines, counts.words, counts.bytes)
-	// }
-	fmt.Println()
+		printCounts(counts, "", *l, *w, *c)
+	} else {
+		failed := false
+		var total Counts
+		for i := range args {
+			counts, err := countFile(args[i])
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				failed = true
+
+				continue
+			}
+			total.add(counts)
+			printCounts(counts, args[i], *l, *w, *c)
+		}
+		if len(args) > 1 {
+			printCounts(total, "total", *l, *w, *c)
+		}
+		if failed {
+			os.Exit(1)
+		}
+
+	}
 
 }
