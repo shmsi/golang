@@ -9,35 +9,48 @@ import (
 	"unicode"
 )
 
-func main() {
-	r := bufio.NewReader(os.Stdin)
-	lines := 0
-	words := 0
-	bytes := 0
+type Counts struct {
+	lines int
+	words int
+	bytes int
+}
+
+func count(r io.Reader) (Counts, error) {
+	counts := Counts{}
 	inword := false
+	br := bufio.NewReader(r)
 	for {
-		ch, size, err := r.ReadRune()
+		ch, size, err := br.ReadRune()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			fmt.Println("error")
-			break
+			return Counts{}, err
 		}
-		bytes += size
+		counts.bytes += size
 
-		if !unicode.IsSpace(ch) && inword == false {
-			words++
+		if !unicode.IsSpace(ch) && !inword {
+			counts.words++
 			inword = true
 		} else if unicode.IsSpace(ch) {
 			inword = false
 			if ch == '\n' {
-				lines++
+				counts.lines++
 			}
 		}
 
 	}
+	return counts, nil
+}
 
-	fmt.Printf("lines %d and bytes %d and words %d", lines, bytes, words)
+func main() {
+	r := os.Stdin
+	counts, err := count(r)
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Printf("lines %d and bytes %d and words %d\n", counts.lines, counts.bytes, counts.words)
 
 }
