@@ -12,15 +12,17 @@ import (
 )
 
 type Counts struct {
-	lines int
-	words int
-	bytes int
+	lines      int
+	words      int
+	bytes      int
+	characters int
 }
 
 func (c *Counts) add(other Counts) {
 	c.bytes += other.bytes
 	c.lines += other.lines
 	c.words += other.words
+	c.characters += other.characters
 }
 
 func count(r io.Reader) (Counts, error) {
@@ -29,18 +31,21 @@ func count(r io.Reader) (Counts, error) {
 	br := bufio.NewReader(r)
 	for {
 		ch, size, err := br.ReadRune()
-		if errors.Is(err, io.EOF) {
-			break
-		}
+
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
 			return Counts{}, err
 		}
 		counts.bytes += size
+		counts.characters++
+		isSpace := unicode.IsSpace(ch)
 
-		if !unicode.IsSpace(ch) && !inword {
+		if !isSpace && !inword {
 			counts.words++
 			inword = true
-		} else if unicode.IsSpace(ch) {
+		} else if isSpace {
 			inword = false
 			if ch == '\n' {
 				counts.lines++
@@ -60,8 +65,8 @@ func countFile(path string) (Counts, error) {
 	return count(f)
 }
 
-func printCounts(counts Counts, name string, showLines, showWords, showBytes bool) {
-	if !showLines && !showWords && !showBytes {
+func printCounts(counts Counts, name string, showLines, showWords, showBytes bool, showChars bool) {
+	if !showLines && !showWords && !showBytes && !showChars {
 		showLines, showWords, showBytes = true, true, true
 	}
 
@@ -73,6 +78,9 @@ func printCounts(counts Counts, name string, showLines, showWords, showBytes boo
 	}
 	if showBytes {
 		fmt.Printf("%8d", counts.bytes)
+	}
+	if showChars {
+		fmt.Printf("%8d", counts.characters)
 	}
 
 	if name != "" {
@@ -91,6 +99,7 @@ func main() {
 	l := flag.Bool("l", false, "print only lines")
 	w := flag.Bool("w", false, "print only word count")
 	c := flag.Bool("c", false, "print only size")
+	m := flag.Bool("m", false, "Print number of chars")
 	flag.Parse()
 
 	args := flag.Args()
@@ -104,15 +113,20 @@ func main() {
 			os.Exit(1)
 		}
 
-		printCounts(counts, "", *l, *w, *c)
+		printCounts(counts, "", *l, *w, *c, *m)
 	} else {
 		var total Counts
 		var wg sync.WaitGroup
+		sem := make(chan struct{}, 3)
 		results := make([]fileResult, len(args))
 		for i, arg := range args {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
 				result, err := countFile(arg)
 				results[i] = fileResult{result, err}
 			}()
@@ -130,10 +144,10 @@ func main() {
 				continue
 			}
 			total.add(r)
-			printCounts(r, args[i], *l, *w, *c)
+			printCounts(r, args[i], *l, *w, *c, *m)
 		}
 		if len(args) > 1 {
-			printCounts(total, "total", *l, *w, *c)
+			printCounts(total, "total", *l, *w, *c, *m)
 		}
 		if anyFailed {
 			os.Exit(1)

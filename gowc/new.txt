@@ -1,0 +1,16 @@
+goos: darwin
+goarch: arm64
+pkg: gowc
+cpu: Apple M2
+BenchmarkCount-8   	     151	   7727445 ns/op	 232.94 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     158	   7582723 ns/op	 237.38 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     157	   7583642 ns/op	 237.35 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     158	   7560699 ns/op	 238.07 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     157	   7958402 ns/op	 226.18 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     158	   7567730 ns/op	 237.85 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     156	   7622542 ns/op	 236.14 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     157	   7634434 ns/op	 235.77 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     158	   7580691 ns/op	 237.45 MB/s	    4128 B/op	       2 allocs/op
+BenchmarkCount-8   	     158	   7561842 ns/op	 238.04 MB/s	    4128 B/op	       2 allocs/op
+PASS
+ok  	gowc	12.163s
