@@ -1,15 +1,5 @@
 [
   {
-    "Id": 1,
-    "Title": "walk dog",
-    "IsDone": true
-  },
-  {
-    "Id": 2,
-    "Title": "buy milk",
-    "IsDone": false
-  },
-  {
     "Id": 3,
     "Title": "call dentist",
     "IsDone": false

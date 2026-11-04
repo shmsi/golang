@@ -9,8 +9,17 @@ import (
 	"io/fs"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 )
+
+type NotFoundError struct {
+	ID int
+}
+
+func (e NotFoundError) Error() string {
+	return fmt.Sprintf("Task id not found", e.ID)
+}
 
 var errUsage = errors.New("Usage error")
 
@@ -48,10 +57,10 @@ func main() {
 		err = runAdd(*file, args)
 	case "list":
 		err = runList(*file, args)
-	// case "done":
-	// 	err = runDone(*file, args)
-	// case "remove":
-	// 	err = runRemove(*file, args)
+	case "done":
+		err = runDone(*file, args)
+	case "remove":
+		err = runRemove(*file, args)
 	default:
 		err = fmt.Errorf("%w: unknown command %q", errUsage, cmd)
 	}
@@ -171,29 +180,72 @@ func runList(file string, args []string) error {
 	return nil
 }
 
-//
-// func runDone(file string, args []string) error {
-// 	fs := flag.NewFlagSet("done", flag.ExitOnError)
-// 	fs.Parse(args)
-//
-// 	id, err := parseID(fs.Args())
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	fmt.Printf("would mark task %d done in %s\n", id, file)
-// 	return nil
-// }
-//
-// func runRemove(file string, args []string) error {
-// 	fs := flag.NewFlagSet("remove", flag.ExitOnError)
-// 	fs.Parse(args)
-//
-// 	id, err := parseID(fs.Args())
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	fmt.Printf("would remove task %d from %s\n", id, file)
-// 	return nil
-// }
+func parseID(args []string) (int, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("%w: expected exactly one task id", errUsage)
+	}
+	id, err := strconv.Atoi(args[0])
+	if err != nil || id < 1 {
+		return 0, fmt.Errorf("%w: invalid task id %q", errUsage, args[0])
+	}
+	return id, nil
+}
+
+func runDone(file string, args []string) error {
+	fs := flag.NewFlagSet("done", flag.ExitOnError)
+	fs.Parse(args)
+
+	id, err := parseID(fs.Args())
+	if err != nil {
+		return err
+	}
+
+	tasks, err := load(file)
+	if err != nil {
+		fmt.Errorf("Could not load tasks from file %s", file)
+		return err
+	}
+
+	found := false
+	for i := range tasks {
+		if tasks[i].Id == id {
+			found = true
+			tasks[i].IsDone = true
+			break
+		}
+	}
+	if !found {
+		return NotFoundError{ID: id}
+	}
+
+	// for i := range tasks {
+	// 	t := &tasks[i]
+	// 	if t.Id == id {
+	// 		t.IsDone = true
+	// 	}
+	// }
+	err = save(file, tasks)
+	return err
+}
+
+func runRemove(file string, args []string) error {
+	fs := flag.NewFlagSet("remove", flag.ExitOnError)
+	fs.Parse(args)
+	id, err := parseID(fs.Args())
+	if err != nil {
+		return err
+	}
+	tasks, err := load(file)
+	if err != nil {
+		return err
+	}
+	before := len(tasks)
+	tasks = slices.DeleteFunc(tasks, func(a Task) bool {
+		return id == a.Id
+	})
+	if len(tasks) == before {
+		return NotFoundError{ID: id}
+	}
+	err = save(file, tasks)
+	return err
+}
