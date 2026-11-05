@@ -18,7 +18,7 @@ type NotFoundError struct {
 }
 
 func (e NotFoundError) Error() string {
-	return fmt.Sprintf("Task id not found", e.ID)
+	return fmt.Sprintf("Task id %d not found", e.ID)
 }
 
 var errUsage = errors.New("Usage error")
@@ -38,6 +38,58 @@ type Task struct {
 	Id     int
 	Title  string
 	IsDone bool
+}
+
+func (t *Task) String() string {
+	mark := " "
+	if t.IsDone {
+		mark = "x"
+	}
+	return fmt.Sprintf("%3d [%s] %s", t.Id, mark, t.Title)
+}
+
+type TaskList []Task
+
+func (l *TaskList) Add(title string) Task {
+	largestID := 0
+	for _, t := range *l {
+		if t.Id > largestID {
+			largestID = t.Id
+		}
+	}
+	newTask := Task{Id: largestID + 1, Title: title, IsDone: false}
+	*l = append(*l, newTask)
+	return newTask
+}
+
+func (l *TaskList) Complete(id int) (Task, error) {
+	var task Task
+	found := false
+	for i := range len(*l) {
+		if (*l)[i].Id == id {
+			(*l)[i].IsDone = true
+			task = (*l)[i]
+			found = true
+			break
+		}
+	}
+	var err error
+	if !found {
+		err = NotFoundError{ID: id}
+	}
+	return task, err
+}
+
+func (l *TaskList) Remove(id int) error {
+	before := len(*l)
+	*l = slices.DeleteFunc(*l, func(a Task) bool {
+		return id == a.Id
+	})
+	if len(*l) == before {
+		return NotFoundError{ID: id}
+	}
+
+	return nil
 }
 
 func main() {
@@ -84,7 +136,7 @@ func main() {
 // 	_, err = f.WriteString()
 // }
 
-func load(path string) ([]Task, error) {
+func load(path string) (TaskList, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -92,7 +144,7 @@ func load(path string) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	var tasks []Task
+	var tasks TaskList
 	if err := json.Unmarshal(data, &tasks); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 
@@ -100,7 +152,7 @@ func load(path string) ([]Task, error) {
 	return tasks, nil
 }
 
-func save(path string, tasks []Task) error {
+func save(path string, tasks TaskList) error {
 	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding tasks: %w", err)
@@ -118,35 +170,19 @@ func runAdd(file string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("Could not parse flag")
 	}
-
 	title := strings.Join(fls.Args(), " ")
 	if title == "" {
 		return fmt.Errorf("%w: add needs a title", errUsage)
 	}
-
 	tasks, err := load(file)
 	if err != nil {
-		fmt.Errorf("Could not load tasks from file %s", file)
 		return err
 	}
+	task := tasks.Add(title)
+	fmt.Printf("Added task with ID %d", task.Id)
 
-	slices.SortFunc(tasks, func(a, b Task) int {
-		return cmp.Compare(a.Id, b.Id)
-	})
-	largestID := 0
-	if len(tasks) > 0 {
-		largestID = tasks[len(tasks)-1].Id
-	}
-	newID := largestID + 1
-	task := Task{Id: newID, Title: title, IsDone: false}
-
-	tasks = append(tasks, task)
 	err = save(file, tasks)
-	if err != nil {
-		fmt.Errorf("Could not add task %s to the list", title)
-		return err
-	}
-	return nil
+	return err
 }
 
 func runList(file string, args []string) error {
@@ -159,21 +195,17 @@ func runList(file string, args []string) error {
 	}
 	tasks, err := load(file)
 	if err != nil {
-		fmt.Errorf("Could not load tasks from file %s", file)
 		return err
 	}
-
 	slices.SortFunc(tasks, func(a, b Task) int {
 		return cmp.Compare(a.Id, b.Id)
 	})
-
 	fmt.Println(*all)
-
 	for _, task := range tasks {
 		if task.IsDone && !*all {
 			continue
 		}
-		fmt.Printf("%3d     %s     %t\n", task.Id, task.Title, task.IsDone)
+		fmt.Println(task)
 
 	}
 
@@ -202,29 +234,12 @@ func runDone(file string, args []string) error {
 
 	tasks, err := load(file)
 	if err != nil {
-		fmt.Errorf("Could not load tasks from file %s", file)
 		return err
 	}
-
-	found := false
-	for i := range tasks {
-		if tasks[i].Id == id {
-			found = true
-			tasks[i].IsDone = true
-			break
-		}
+	task, err := tasks.Complete(id)
+	if err == nil {
+		fmt.Printf("Completed task with id %d ", task.Id)
 	}
-	if !found {
-		return NotFoundError{ID: id}
-	}
-
-	// for i := range tasks {
-	// 	t := &tasks[i]
-	// 	if t.Id == id {
-	// 		t.IsDone = true
-	// 	}
-	// }
-	err = save(file, tasks)
 	return err
 }
 
@@ -239,13 +254,9 @@ func runRemove(file string, args []string) error {
 	if err != nil {
 		return err
 	}
-	before := len(tasks)
-	tasks = slices.DeleteFunc(tasks, func(a Task) bool {
-		return id == a.Id
-	})
-	if len(tasks) == before {
-		return NotFoundError{ID: id}
+	err = tasks.Remove(id)
+	if err == nil {
+		save(file, tasks)
 	}
-	err = save(file, tasks)
 	return err
 }
