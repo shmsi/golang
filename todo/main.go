@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -153,15 +154,36 @@ func load(path string) (TaskList, error) {
 }
 
 func save(path string, tasks TaskList) error {
+	// 1. create temp file
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+
+	//2. Make sure it gets cleaned up if anything below fails
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
 	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding tasks: %w", err)
 	}
 	data = append(data, '\n')
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
+
+	_, err = tmp.Write(data)
+	if err != nil {
+		return err
 	}
-	return nil
+
+	err = tmp.Sync()
+	if err != nil {
+		return err
+	}
+
+	if err := tmp.Close(); err != nil { // the real, checked close
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 func runAdd(file string, args []string) error {
