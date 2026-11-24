@@ -36,12 +36,14 @@ const SelectByCode = `SELECT long_url FROM links WHERE code = ?`
 const SelectByURL = `SELECT code FROM links WHERE long_url = ?`
 const InsertLink = `INSERT INTO links(code, long_url) VALUES(?, ?) ON CONFLICT DO NOTHING`
 const UpdateClicks = `UPDATE links SET clicks = clicks + ? where code = ?`
+const SelectStats = `SELECT long_url, clicks FROM links WHERE code = ?`
 
 var ErrNotFound = errors.New("code not found")
 
 type Store interface {
 	Get(ctx context.Context, code string) (string, error)
 	Put(ctx context.Context, longURL string) (code string, existed bool, err error)
+	Stats(ctx context.Context, code string) (URLStats, error)
 }
 
 type DBStore struct {
@@ -183,6 +185,45 @@ type CreateResponse struct {
 	ShortURL string `json:"short_url"`
 }
 
+type URLStats struct {
+	Code   string `json:"code"`
+	URL    string `json:"url"`
+	Clicks int    `json:"clicks"`
+}
+
+func (d *DBStore) Stats(ctx context.Context, code string) (URLStats, error) {
+	var urlStat URLStats
+	err := d.db.QueryRowContext(ctx, SelectStats, code).Scan(&urlStat.URL, &urlStat.Clicks)
+	if errors.Is(err, sql.ErrNoRows) {
+		return URLStats{}, ErrNotFound
+	}
+	if err != nil {
+		return URLStats{}, fmt.Errorf("get %q: %w", code, err)
+	}
+	urlStat.Code = code
+	return urlStat, nil
+
+}
+
+func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	stats, err := s.store.Stats(ctx, code)
+	if errors.Is(err, ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		log.Printf("get %q: %v", code, err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+
+}
+
 func (s *server) handleRedirect(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 
@@ -275,6 +316,7 @@ func main() {
 	s := &server{store: dbStore}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{code}", s.handleRedirect)
+	mux.HandleFunc("GET /links/{code}/stats", s.handleStats)
 	mux.HandleFunc("POST /links", s.handleCreate)
 
 	counterDone := make(chan struct{})
