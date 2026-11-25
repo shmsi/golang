@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +15,9 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
 	db, err := sql.Open("sqlite", "file:test.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		log.Fatal(err)
@@ -27,7 +31,7 @@ func main() {
 	dbStore := newDBStore(db)
 
 	cache := newCachedStore(dbStore)
-	s := &server{store: *cache, clicks: dbStore}
+	s := &server{store: cache, clicks: dbStore}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{code}", s.handleRedirect)
 	mux.HandleFunc("GET /links/{code}/stats", s.handleStats)
@@ -45,12 +49,12 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	log.Println("Listening on :8080")
+	slog.Info("listening", "addr", ":8080")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	<-ctx.Done()
-	log.Println("shutting down")
+	slog.Info("shutting down")
 
 	// 1. Stop the server: returns once every in-flight request has finished.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -58,7 +62,7 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		// Timed out: handlers may still be sending clicks, so closing the
 		// channel now could panic. Give up on the final flush instead.
-		log.Printf("shutdown: %v", err)
+		slog.Error("shutdown", "err", err)
 		return
 	}
 

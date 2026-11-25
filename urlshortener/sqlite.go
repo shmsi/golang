@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -60,7 +60,7 @@ func (d *DBStore) RecordClick(code string) {
 	select {
 	case d.clickChan <- code:
 	default:
-		log.Println("Buffer full - dropped the click")
+		slog.Warn("click dropped, buffer full", "code", code)
 	}
 }
 
@@ -76,7 +76,7 @@ func (d *DBStore) AddClicks() {
 		case code, ok := <-d.clickChan:
 			if !ok { // closed and empty: every buffered click has been counted
 				d.flush(counts)
-				log.Println("final flush done")
+				slog.Info("final flush done")
 				return
 			}
 			counts[code]++
@@ -95,7 +95,7 @@ func (d *DBStore) flush(counts map[string]int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := d.addClicks(ctx, counts); err != nil {
-		log.Printf("flush clicks: %v", err)
+		slog.Error("flush clicks", "err", err, "codes", len(counts))
 		return
 	}
 	clear(counts)
@@ -127,7 +127,6 @@ func batchUpdateQuery(counts map[string]int) (string, []any) {
 	      FROM (VALUES ` + strings.Join(rows, ", ") + `) AS v
 	      WHERE links.code = v.column1`
 
-	fmt.Println(q)
 	return q, args
 }
 

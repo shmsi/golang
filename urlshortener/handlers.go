@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,7 +18,7 @@ type clickRecorder interface {
 }
 
 type server struct {
-	store  cachedStore
+	store  Store
 	clicks clickRecorder
 }
 
@@ -35,13 +35,13 @@ func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	stats, err := s.store.next.Stats(ctx, code)
+	stats, err := s.store.Stats(ctx, code)
 	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
 	if err != nil {
-		log.Printf("get %q: %v", code, err)
+		slog.Error("get stats", "code", code, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -61,7 +61,7 @@ func (s *server) handleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("get %q: %v", code, err)
+		slog.Error("get link", "code", code, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -84,14 +84,14 @@ func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	code, existed, err := s.store.Put(ctx, req.URL)
 	if err != nil {
-		log.Printf("put %q: %v", req.URL, err)
+		slog.Error("create link", "url", req.URL, "err", err)
 		http.Error(w, "could not shorten url", http.StatusInternalServerError)
 		return
 	}
 
 	short, err := shortURL(code)
 	if err != nil {
-		log.Printf("build short url for %q: %v", code, err)
+		slog.Error("build short url", "code", code, "err", err)
 		http.Error(w, "could not shorten url", http.StatusInternalServerError)
 		return
 	}
