@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type ctxKey string
+
+const requestIDKey ctxKey = "request_id"
 
 type responseRecorder struct {
 	http.ResponseWriter
@@ -40,12 +47,20 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		}
 		slog.Info("http request",
 			"method", r.Method,
+			"request-id", RequestIDFromContext(r.Context()),
 			"path", r.URL.Path,
 			"status", status,
 			"bytes", rec.bytes,
 			"duration", time.Since(start),
 		)
 	})
+}
+func RequestIDFromContext(ctx context.Context) string {
+	id, ok := ctx.Value(requestIDKey).(string)
+	if !ok {
+		return ""
+	}
+	return id
 }
 
 func RecoveryMiddleware(next http.Handler) http.Handler {
@@ -64,6 +79,20 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func RequestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rHeader := "X-Request-Id"
+		id := r.Header.Get(rHeader)
+		if _, err := uuid.Parse(id); err != nil {
+			id = uuid.NewString()
+		}
+		w.Header().Set(rHeader, id)
+		ctx := context.WithValue(r.Context(), requestIDKey, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+
 }
 
 type Middleware func(http.Handler) http.Handler
