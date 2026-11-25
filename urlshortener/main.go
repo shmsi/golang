@@ -43,7 +43,7 @@ func main() {
 		dbStore.AddClicks()
 	}()
 
-	srv := &http.Server{Addr: ":8080", Handler: mux}
+	srv := &http.Server{Addr: ":8080", Handler: chain(mux, LoggingMiddleware, RecoveryMiddleware)}
 	go func() {
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
