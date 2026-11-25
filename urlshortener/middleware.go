@@ -45,9 +45,8 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		if status == 0 {
 			status = http.StatusOK
 		}
-		slog.Info("http request",
+		slog.InfoContext(r.Context(), "http request",
 			"method", r.Method,
-			"request-id", RequestIDFromContext(r.Context()),
 			"path", r.URL.Path,
 			"status", status,
 			"bytes", rec.bytes,
@@ -67,7 +66,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				slog.Error("panic recovered",
+				slog.ErrorContext(r.Context(), "panic recovered",
 					"error", err,
 					"method", r.Method,
 					"path", r.URL.Path,

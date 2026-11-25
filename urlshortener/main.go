@@ -15,7 +15,9 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := slog.New(ctxHandler{
+		slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),
+	})
 	slog.SetDefault(logger)
 
 	db, err := sql.Open("sqlite", "file:test.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")

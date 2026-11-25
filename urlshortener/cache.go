@@ -27,7 +27,7 @@ func (c *cachedStore) Get(ctx context.Context, code string) (string, error) {
 	c.mu.RUnlock()
 
 	if ok {
-		slog.Debug("cache hit", "op", "get", "code", code)
+		slog.DebugContext(ctx, "cache hit", "op", "get", "code", code)
 		return url, nil
 	}
 
@@ -51,7 +51,7 @@ func (c *cachedStore) Put(ctx context.Context, longURL string) (code string, exi
 	code, exists := c.urlsToCode[longURL]
 	c.mu.RUnlock()
 	if exists {
-		slog.Debug("cache hit", "op", "put", "code", code)
+		slog.DebugContext(ctx, "cache hit", "op", "put", "code", code)
 		return code, true, nil
 	}
 	code, existed, err = c.next.Put(ctx, longURL)

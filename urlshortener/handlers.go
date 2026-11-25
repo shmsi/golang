@@ -41,7 +41,7 @@ func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("get stats", "code", code, "err", err)
+		slog.ErrorContext(ctx, "get stats", "code", code, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -61,7 +61,7 @@ func (s *server) handleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("get link", "code", code, "err", err)
+		slog.ErrorContext(ctx, "get link", "code", code, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -84,14 +84,14 @@ func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	code, existed, err := s.store.Put(ctx, req.URL)
 	if err != nil {
-		slog.Error("create link", "url", req.URL, "err", err)
+		slog.ErrorContext(ctx, "create link", "url", req.URL, "err", err)
 		http.Error(w, "could not shorten url", http.StatusInternalServerError)
 		return
 	}
 
 	short, err := shortURL(code)
 	if err != nil {
-		slog.Error("build short url", "code", code, "err", err)
+		slog.ErrorContext(ctx, "build short url", "code", code, "err", err)
 		http.Error(w, "could not shorten url", http.StatusInternalServerError)
 		return
 	}
