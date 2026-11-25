@@ -1,0 +1,9 @@
+*.db
+*.db-shm
+*.db-wal
+*.out
+*.test
+old.txt
+new.txt
+todos.json
+Claude outputs/
